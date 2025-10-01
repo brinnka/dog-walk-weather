@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ふうた・ちふゆの散歩天気チェック</title>
+<style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+    .快適 { background-color: lightgreen; }
+    .注意 { background-color: lightyellow; }
+    .危険 { background-color: lightcoral; }
+</style>
+</head>
+<body>
+
+<h2>ふうた・ちふゆの散歩天気チェック</h2>
+
+<label>都道府県:
+    <select id="prefSelect">
+        <option value="">選択してください</option>
+    </select>
+</label>
+
+<label>市区町村:
+    <select id="citySelect">
+        <option value="">選択してください</option>
+    </select>
+</label>
+
+<button id="btnGetWeather">天気を取得</button>
+
+<table id="weatherTable">
+    <thead>
+        <tr>
+            <th>日付</th>
+            <th>時間</th>
+            <th>天気</th>
+            <th>気温(℃)</th>
+            <th>アスファルト(℃)</th>
+            <th>犬の散歩</th>
+            <th>注意ポイント</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<script>
+// regions.json をコピーしてここに貼り付け（例: 東京・江戸川区など）
+const regions = [
+  {
+    "pref": "東京都",
+    "city": "江戸川区",
+    "lat": 35.7101,
+    "lon": 139.8764
+  },
+  {
+    "pref": "東京都",
+    "city": "葛飾区",
+    "lat": 35.7442,
+    "lon": 139.8705
+  },
+  {
+    "pref": "東京都",
+    "city": "江東区",
+    "lat": 35.6762,
+    "lon": 139.8136
+  },
+  {
+    "pref": "東京都",
+    "city": "墨田区",
+    "lat": 35.7108,
+    "lon": 139.8107
+  },
+  {
+    "pref": "東京都",
+    "city": "台東区",
+    "lat": 35.7112,
+    "lon": 139.7967
+  },
+  {
+    "pref": "東京都",
+    "city": "足立区",
+    "lat": 35.7805,
+    "lon": 139.8107
+  },
+  {
+    "pref": "千葉県",
+    "city": "市川市",
+    "lat": 35.7320,
+    "lon": 139.9760
+  },
+  {
+    "pref": "千葉県",
+    "city": "船橋市",
+    "lat": 35.6980,
+    "lon": 139.9830
+  },
+  {
+    "pref": "千葉県",
+    "city": "浦安市",
+    "lat": 35.6660,
+    "lon": 139.8830
+  },
+  {
+    "pref": "埼玉県",
+    "city": "熊谷市",
+    "lat": 36.1454,
+    "lon": 139.7730
+  },
+  {
+    "pref": "埼玉県",
+    "city": "本庄市",
+    "lat": 36.2333,
+    "lon": 139.2320
+  },
+  {
+    "pref": "埼玉県",
+    "city": "寄居町",
+    "lat": 36.0167,
+    "lon": 139.3667
+  },
+  {
+    "pref": "埼玉県",
+    "city": "行田市",
+    "lat": 36.1333,
+    "lon": 139.4833
+  },
+  {
+    "pref": "埼玉県",
+    "city": "深谷市",
+    "lat": 36.1833,
+    "lon": 139.2770
+  },
+  {
+    "pref": "埼玉県",
+    "city": "秩父市",
+    "lat": 35.9967,
+    "lon": 139.0700
+  }
+
+];
+
+// 都道府県リスト
+const prefSelect = document.getElementById('prefSelect');
+const citySelect = document.getElementById('citySelect');
+regions.map(r => r.pref).filter((v, i, a) => a.indexOf(v) === i)
+       .forEach(pref => { prefSelect.add(new Option(pref, pref)); });
+
+// 都道府県選択時に市区町村を表示
+prefSelect.addEventListener('change', () => {
+    citySelect.innerHTML = '<option value="">選択してください</option>';
+    const cities = regions.filter(r => r.pref === prefSelect.value);
+    cities.forEach(c => citySelect.add(new Option(c.city, c.city)));
+});
+
+// 天気取得
+document.getElementById('btnGetWeather').addEventListener('click', async () => {
+    const cityName = citySelect.value;
+    if (!cityName) { alert("市区町村を選択してください"); return; }
+
+    const cityData = regions.find(r => r.city === cityName);
+    const lat = cityData.lat;
+    const lon = cityData.lon;
+    const apiKey = 'd902e35c8fc724a036c85ea6b71b6f18';
+    const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&lang=ja&appid=${apiKey}`;
+
+try {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    // APIエラーの確認
+    if (!data.list) {
+        alert("天気情報の取得に失敗しました: " + (data.message || "データがありません"));
+        return;
+    }
+
+    const tbody = document.querySelector('#weatherTable tbody');
+    tbody.innerHTML = '';
+
+    data.list.forEach(item => {
+        const dt = new Date(item.dt * 1000);
+        const dateStr = dt.toLocaleDateString();
+        const timeStr = dt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+        const temp = item.main.temp;
+        const asphalt = Math.round((temp + 7) * 100) / 100;
+
+        let walk = '';
+        let note = '';
+        if (asphalt >= 35) { walk = '危険'; note = '暑さ注意'; }
+        else if (asphalt >= 30) { walk = '注意'; note = '短時間なら可'; }
+        else { walk = '快適'; }
+
+        const tr = document.createElement('tr');
+        tr.className = walk;
+        tr.innerHTML = `
+            <td>${dateStr}</td>
+            <td>${timeStr}</td>
+            <td>${item.weather[0].description}</td>
+            <td>${temp}</td>
+            <td>${asphalt}</td>
+            <td>${walk}</td>
+            <td>${note}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+} catch(err) {
+    alert("天気情報の取得に失敗しました: " + err.message);
+}});
+</script>
+
+</body>
+</html>
